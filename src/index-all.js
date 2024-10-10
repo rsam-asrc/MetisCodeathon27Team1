@@ -3,6 +3,7 @@ const getLastPathPart = (path) => {
     const lastSlashIndex = path.lastIndexOf('/');
     return lastSlashIndex !== -1 ? path.substring(lastSlashIndex + 1) : path;
   }
+  //test
   
   const init = (event) => {
     console.log("event!!", event);
