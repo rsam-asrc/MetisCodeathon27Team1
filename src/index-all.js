@@ -103,6 +103,7 @@ const moveOLD = (event) => {
 };
 
 
+
 class Board {
     constructor(data) {
         this.data = data;
@@ -157,17 +158,79 @@ class Board {
         }
         return { type: "wall", x, y };
     }
+}
 
+class Snake {
+    constructor(gameData, snake, board) {
+        this.snake = snake;
+        this.id = snake.id;
+        this.name = snake.name;
+        this.latency = snake.latency;
+        this.health = snake.health;
+        this.body = snake.body;
+        this.head = snake.head;
+        this.length = snake.length;
+        this.shout = snake.shout;
+        this.squad = snake.squad;
+
+        this.board = board;
+
+        this.isYou = this.id === gameData.you.id;
+        this.direction = this.getDirection();
+    }
+
+    getDirection() {
+        // find the direction of the snake
+        const head = this.head;
+
+        if (!this.body || this.body.length < 2) {
+            return "up";
+        }
+
+        const neck = this.body[1];
+        if (head.x === neck.x) {
+            return head.y > neck.y ? "down" : "up";
+        }
+        return head.x > neck.x ? "right" : "left";
+    }
+}
+
+class Game {
+    constructor(battleSnakesJsonString) {
+        this.gameData = JSON.parse(battleSnakesJsonString);
+        this.board = new Board(this.gameData);
+        this.snakes = this.gameData.board.snakes.map(snake => new Snake(this.gameData, snake, this.board));
+        this.you = this.snakes.filter(snake => snake.isYou)[0];
+    }
+}
+
+class StrategyBase {
+    constructor(board, snakes, you) {
+        this.board = board;
+        this.snakes = snakes;
+        this.you = you;
+    }
+
+    getNextMove() {
+        return "up";
+    }
+}
+
+class SimpleEaterStrategy extends StrategyBase {
+    constructor(board, snakes, you) {
+        super(board, snakes, you);
+    }
 
     scan(x, y, axis = "x", dir = 1, maxDist = 100) {
         // dir is 1 or -1
         dir = Math.sign(dir);
         // clamp maxDist between 1 and width
-        maxDist = Math.min(Math.max(1, maxDist), this.width);
+        maxDist = Math.min(Math.max(1, maxDist), this.board.width);
+
         for (let dist = 1; dist <= maxDist; dist++) {
             const cell = axis === "x" ?
-                this.getCell(x + (dist * dir), y) :
-                this.getCell(x, y + (dist * dir));
+                this.board.getCell(x + (dist * dir), y) :
+                this.board.getCell(x, y + (dist * dir));
             if (cell.type !== "empty") {
                 return {
                     ...cell,
@@ -206,46 +269,11 @@ class Board {
             { move: "down", cell: this.scanDown(x, y) }
         ];
     }
-}
-
-class Snake {
-    constructor(gameData, snake, board) {
-        this.snake = snake;
-        this.id = snake.id;
-        this.name = snake.name;
-        this.latency = snake.latency;
-        this.health = snake.health;
-        this.body = snake.body;
-        this.head = snake.head;
-        this.length = snake.length;
-        this.shout = snake.shout;
-        this.squad = snake.squad;
-
-        this.board = board;
-
-        this.isYou = this.id === gameData.you.id;
-        this.direction = this.getDirection();
-    }
-
-    getDirection() {
-        // find the direction of the snake
-        const head = this.head;
-
-        if (!this.body || this.body.length < 2) {
-            return "up";
-        }
-
-        const neck = this.body[1];
-        if (head.x === neck.x) {
-            return head.y > neck.y ? "down" : "up";
-        }
-        return head.x > neck.x ? "right" : "left";
-    }
 
     getNextMove() {
         // scan the board looking for food
-        const { x, y } = this.head;
-        const scans = this.board.scanAll(x, y);
+        const { x, y } = this.you.head;
+        const scans = this.scanAll(x, y);
 
         let closestFood = null;
         let firstFoundEmpty = null;
@@ -261,36 +289,22 @@ class Snake {
         }
 
         if (closestFood) {
-            // console.log("head position", x, y);
-            // console.log("closest food", closestFood.move, closestFood.cell.dist, closestFood.cell.x, closestFood.cell.y);
-            // console.log("move", closestFood.move);
             return closestFood.move;
         }
 
         if (firstFoundEmpty) {
-            // console.log("head position", x, y);
-            // console.log("first empty", firstFoundEmpty.move, firstFoundEmpty.cell.dist, firstFoundEmpty.cell.x, firstFoundEmpty.cell.y);
-            // console.log("move", firstFoundEmpty.move);
             return firstFoundEmpty.move;
         }
 
-        // no good move
-        return undefined;
-    }
-}
-
-class Game {
-    constructor(battleSnakesJsonString) {
-        this.gameData = JSON.parse(battleSnakesJsonString);
-        this.board = new Board(this.gameData);
-        this.snakes = this.gameData.board.snakes.map(snake => new Snake(this.gameData, snake, this.board));
-        this.you = this.snakes.filter(snake => snake.isYou)[0];
+        // no good move - default to current direction
+        return this.you.direction;
     }
 }
 
 const move = (event) => {
     const game = new Game(event.body);
-    const move = game.you.getNextMove();
+    const strategy = new SimpleEaterStrategy(game.board, game.snakes, game.you);
+    const move = strategy.getNextMove();
     return { move };
 }
 
